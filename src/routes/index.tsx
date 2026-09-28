@@ -53,7 +53,7 @@ function Index() {
         <div className="mx-auto flex h-17 max-w-7xl items-center justify-between gap-4 px-5 md:px-8">
           <a href="#top" className="flex shrink-0 items-center gap-2.5" aria-label="Signal home">
             <span className="grid size-8 place-items-center rounded-md bg-primary font-display text-lg text-primary-foreground">S</span>
-            <span className="font-display text-xl">SIGNAL<span className="text-primary">.</span></span>
+            <span className="font-display text-xl">SEGA&nbsp;<span className="text-primary">(unnofficial)</span></span>
           </a>
           <nav className="hidden items-center gap-8 text-sm text-muted-foreground md:flex" aria-label="Main navigation">
             <a className="transition-colors hover:text-foreground" href="#players">Players</a>
@@ -156,7 +156,7 @@ function Index() {
 
       <footer className="border-t border-border">
         <div className="mx-auto flex max-w-7xl flex-col items-start justify-between gap-5 px-5 py-8 sm:flex-row sm:items-center md:px-8">
-          <div className="flex items-center gap-2"><span className="grid size-6 place-items-center rounded-sm bg-primary font-display text-sm text-primary-foreground">S</span><span className="font-display text-lg">SIGNAL.</span></div>
+          <div className="flex items-center gap-2"><span className="grid size-6 place-items-center rounded-sm bg-primary font-display text-sm text-primary-foreground">S</span><span className="font-display text-lg">SEGA (unnofficial)</span></div>
           <p className="text-xs text-muted-foreground">A fan-made discovery concept. Not affiliated with or endorsed by SEGA.</p>
           <a className="inline-flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground" href="https://www.sega.com/" target="_blank" rel="noopener noreferrer">Visit SEGA <ArrowRight size={13} /></a>
         </div>
