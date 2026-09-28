@@ -53,7 +53,7 @@ export const Route = createFileRoute("/api/chat")({
         const visitorId = body.visitorId ?? "";
         const messages = (body.messages ?? []).slice(-30);
         if (!UUID.test(visitorId) || messages.length === 0) return json({ error: "Invalid request" }, 400);
-        const last = messages[messages.length - 1];
+        const last = messages[messages.length - 1]!;
         const text = last.parts.map((p) => (p.type === "text" ? p.text : "")).join("");
         if (last.role !== "user" || text.length > 1000) return json({ error: "Message too long" }, 400);
 
