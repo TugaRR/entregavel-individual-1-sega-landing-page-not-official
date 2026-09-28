@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { ArrowRight, Bell, Compass, Film, Gamepad2, Layers3, Play, Radar, Sparkles, Trophy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import heroAsset from "@/assets/sonic-crossworlds-official.webp.asset.json";
+import { ChatWidget } from "@/components/ChatWidget";
 
 const gameUrl = "https://asia.sega.com/SonicRacingCrossWorlds/en/";
 const trailerUrl = "https://www.youtube.com/watch?v=EbyfGzVPb-8";
@@ -160,6 +161,7 @@ function Index() {
           <a className="inline-flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground" href="https://www.sega.com/" target="_blank" rel="noopener noreferrer">Visit SEGA <ArrowRight size={13} /></a>
         </div>
       </footer>
+      <ChatWidget />
     </div>
   );
 }
