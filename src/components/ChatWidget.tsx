@@ -41,7 +41,7 @@ export function ChatWidget() {
           aria-label="Open the Sonic Racing: CrossWorlds assistant"
           className="fixed right-4 bottom-4 z-[60] flex items-center gap-2 rounded-full bg-primary py-3 pr-5 pl-4 font-display text-base tracking-wide text-primary-foreground shadow-lg shadow-primary/30 transition-transform hover:scale-105 sm:right-6 sm:bottom-6"
         >
-          <Flag size={18} strokeWidth={2.2} /> ASK SIGNAL
+          <Flag size={18} strokeWidth={2.2} /> ASK CHATBOT
         </button>
       )}
     </>
