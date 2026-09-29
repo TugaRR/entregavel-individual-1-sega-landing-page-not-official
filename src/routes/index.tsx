@@ -3,6 +3,7 @@ import { ArrowRight, Bell, Compass, Film, Gamepad2, Layers3, Play, Radar, Sparkl
 import { Button } from "@/components/ui/button";
 import heroAsset from "@/assets/sonic-crossworlds-official.webp.asset.json";
 import { ChatWidget } from "@/components/ChatWidget";
+import { CalMeetingButton } from "@/components/CalMeetingButton";
 
 const gameUrl = "https://asia.sega.com/SonicRacingCrossWorlds/en/";
 const trailerUrl = "https://www.youtube.com/watch?v=EbyfGzVPb-8";
@@ -75,6 +76,7 @@ function Index() {
               <div className="mt-8 flex flex-wrap gap-3">
                 <Button asChild size="lg"><a href="#discover">Start discovering <ArrowRight /></a></Button>
                 <Button asChild size="lg" variant="glass"><a href={trailerUrl} target="_blank" rel="noopener noreferrer"><Play /> Watch trailer</a></Button>
+                <CalMeetingButton />
               </div>
               <div className="mt-11 flex flex-wrap items-center gap-3 border-t border-border pt-5 font-mono text-[10px] uppercase text-muted-foreground sm:gap-6">
                 <span>FEATURED: SONIC RACING: CROSSWORLDS</span><span className="hidden size-1 rounded-full bg-primary sm:block" /><span>OFFICIAL ARTWORK</span>
@@ -131,6 +133,7 @@ function Index() {
               <div className="mt-8 flex flex-wrap justify-center gap-3">
                 <Button asChild size="lg"><a href={gameUrl} target="_blank" rel="noopener noreferrer">Explore the game <ArrowRight /></a></Button>
                 <Button asChild size="lg" variant="glass"><a href="#players"><Gamepad2 /> Who it’s for</a></Button>
+                <CalMeetingButton />
               </div>
             </div>
           </section>
