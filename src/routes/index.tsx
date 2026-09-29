@@ -54,7 +54,7 @@ function Index() {
         <div className="mx-auto flex h-17 max-w-7xl items-center justify-between gap-4 px-5 md:px-8">
           <a href="#top" className="flex shrink-0 items-center gap-2.5" aria-label="Signal home">
             <span className="grid size-8 place-items-center rounded-md bg-primary font-display text-lg text-primary-foreground">S</span>
-            <span className="font-display text-xl">SEGA&nbsp;<span className="text-primary">(unnofficial)</span></span>
+            <span className="font-display text-xl">SEGA&nbsp;<span className="text-primary"></span></span>
           </a>
           <nav className="hidden items-center gap-8 text-sm text-muted-foreground md:flex" aria-label="Main navigation">
             <a className="transition-colors hover:text-foreground" href="#players">Players</a>
