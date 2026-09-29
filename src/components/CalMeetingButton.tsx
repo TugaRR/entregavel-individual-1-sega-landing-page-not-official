@@ -35,12 +35,12 @@ export function CalMeetingButton({
 
     // Cal.com bootstrap — must run before embed.js loads.
     if (!window.Cal) {
-      const Cal = function cal(...args: unknown[]) {
+      const cal: NonNullable<Window["Cal"]> = function (...args: unknown[]) {
         (cal.q = cal.q || []).push(args);
-      } as NonNullable<Window["Cal"]>;
-      Cal.q = [];
-      Cal.ns = {};
-      window.Cal = Cal;
+      };
+      cal.q = [];
+      cal.ns = {};
+      window.Cal = cal;
     }
 
     const script = document.createElement("script");
