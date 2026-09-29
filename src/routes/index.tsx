@@ -159,7 +159,7 @@ function Index() {
 
       <footer className="border-t border-border">
         <div className="mx-auto flex max-w-7xl flex-col items-start justify-between gap-5 px-5 py-8 sm:flex-row sm:items-center md:px-8">
-          <div className="flex items-center gap-2"><span className="grid size-6 place-items-center rounded-sm bg-primary font-display text-sm text-primary-foreground">S</span><span className="font-display text-lg">SEGA (unnofficial)</span></div>
+          <div className="flex items-center gap-2"><span className="grid size-6 place-items-center rounded-sm bg-primary font-display text-sm text-primary-foreground">S</span><span className="font-display text-lg">SEGA</span></div>
           <p className="text-xs text-muted-foreground">A fan-made discovery concept. Not affiliated with or endorsed by SEGA.</p>
           <a className="inline-flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground" href="https://www.sega.com/" target="_blank" rel="noopener noreferrer">Visit SEGA <ArrowRight size={13} /></a>
         </div>
