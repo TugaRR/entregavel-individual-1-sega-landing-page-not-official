@@ -28,43 +28,28 @@ export const proposalRequestSchema = z.object({
 
 export type ProposalRequestValues = z.infer<typeof proposalRequestSchema>;
 
-/**
- * Shape of one stored request. Firestore field names are declared here so the
- * future `setDoc` call and this app can never drift apart.
- */
-export type ProposalRequestRecord = ProposalRequestValues & {
-  id: string;
-  createdAt: string;
-  source: "sega-landing-page";
-  status: "new";
-};
+export type ProposalRequestRecord = ProposalRequestValues & { id: string };
 
-/** Firestore collection name for future integration. */
-export const PROPOSAL_COLLECTION = "proposal_requests";
+/** Firestore collection name. */
+export const PROPOSAL_COLLECTION = "proposals";
 
 /**
- * Validates a request and returns the record that would be stored.
- *
- * NOT YET CONNECTED TO FIREBASE — no price calculation, no AI interpretation,
- * no email sending and no proposal generation happens here.
- *
- * When Firestore is added, this is the only function that needs to change:
- * create the Firebase app in a browser-safe module (dynamic import, never at
- * module scope of an SSR route) and replace the return with
- * `await setDoc(doc(db, PROPOSAL_COLLECTION, record.id), record)`.
+ * Validates and saves a request to Firestore. No price calculation, AI,
+ * email sending or proposal generation happens here.
  */
 export async function submitProposalRequest(
   values: ProposalRequestValues,
 ): Promise<{ ok: true; record: ProposalRequestRecord }> {
   const parsed = proposalRequestSchema.parse(values);
-
-  const record: ProposalRequestRecord = {
-    ...parsed,
-    id: crypto.randomUUID(),
-    createdAt: new Date().toISOString(),
-    source: "sega-landing-page",
-    status: "new",
-  };
-
-  return { ok: true, record };
+  const { getDb } = await import("@/lib/firebase");
+  const db = await getDb();
+  const { addDoc, collection, serverTimestamp } = await import("firebase/firestore");
+  const ref = await addDoc(collection(db, PROPOSAL_COLLECTION), {
+    name: parsed.name,
+    email: parsed.email,
+    request: parsed.request,
+    status: "received",
+    created_at: serverTimestamp(),
+  });
+  return { ok: true, record: { ...parsed, id: ref.id } };
 }
