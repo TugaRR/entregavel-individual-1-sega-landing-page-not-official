@@ -10,4 +10,4 @@
 <!-- LOVABLE:END -->
 
 - Keep this project as a single-page SEGA-inspired discovery concept with official outbound links; the source brief provides marketing structure, not a live catalog or sign-up service.
-- The "Request a Proposal" form validates in the browser and stores nothing until a Firestore write is wired into `submitProposalRequest` in `src/lib/proposal-request.ts`; do not add price calculation, AI interpretation, email sending, or proposal generation. Why: the interface and its validation were asked for first, and storage is a deliberate later step.
+- The "Request a Proposal" form saves to Firestore collection `proposals` via `submitProposalRequest` (src/lib/proposal-request.ts), with Firebase config from `VITE_FIREBASE_*` env vars in src/lib/firebase.ts loaded by dynamic import; no price calculation, AI, email sending or proposal generation. Why: storage only for now, and Firebase must stay out of SSR.

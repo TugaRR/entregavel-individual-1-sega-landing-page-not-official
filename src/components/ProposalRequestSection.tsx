@@ -37,9 +37,24 @@ export function ProposalRequestSection() {
   });
   const requestLength = form.watch("request").length;
 
+  const [error, setError] = useState<string | null>(null);
+  const busy = form.formState.isSubmitting;
+
   async function onSubmit(values: ProposalRequestValues) {
-    const { record } = await submitProposalRequest(values);
-    setSaved(record);
+    setError(null);
+    try {
+      const { record } = await submitProposalRequest(values);
+      form.reset({ name: "", email: "", request: "" });
+      setSaved(record);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setError(
+        msg.startsWith("Firebase is not configured")
+          ? msg
+          : "We couldn't send your request right now. Please try again in a moment.",
+      );
+      console.error("Proposal submission failed:", e);
+    }
   }
 
   return (
@@ -99,6 +114,7 @@ export function ProposalRequestSection() {
           ) : (
             <Form {...form}>
               <form onSubmit={form.handleSubmit(onSubmit)} noValidate aria-labelledby="proposal-heading" className="space-y-6">
+                <fieldset disabled={busy} className="space-y-6">
                 <div className="grid gap-6 sm:grid-cols-2">
                   <FormField
                     control={form.control}
@@ -170,14 +186,21 @@ export function ProposalRequestSection() {
                     </FormItem>
                   )}
                 />
+                </fieldset>
+
+                {error && (
+                  <p role="alert" className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+                    {error}
+                  </p>
+                )}
 
                 <div className="flex flex-col gap-3 border-t border-border pt-6 sm:flex-row sm:items-center sm:justify-between">
                   <p className="font-mono text-[10px] uppercase leading-relaxed text-muted-foreground">
                     Prototype form — nothing is charged or generated.
                   </p>
-                  <Button type="submit" size="lg" className="w-full sm:w-auto" disabled={form.formState.isSubmitting}>
-                    {form.formState.isSubmitting ? "Sending…" : "Submit Proposal Request"}
-                    {!form.formState.isSubmitting && <SendHorizontal />}
+                  <Button type="submit" size="lg" className="w-full sm:w-auto" disabled={busy}>
+                    {busy ? "Sending…" : "Submit Proposal Request"}
+                    {!busy && <SendHorizontal />}
                   </Button>
                 </div>
               </form>
