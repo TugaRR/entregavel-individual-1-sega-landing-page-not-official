@@ -4,4 +4,4 @@
 - [x] Add ten factual FAQs and a final call to action.
 - [x] Use official related artwork; check mobile, desktop, and links.
 - [x] Add "Request a Proposal" section: name, email, request, validation, submit button.
-- [ ] Store proposal requests in Firestore (waiting on the Firebase project details).
+- [x] Wire proposal form to Firestore collection `proposals` (status "received", created_at). Done, but blocked on user filling VITE_FIREBASE_* values in .env.
