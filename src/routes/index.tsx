@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import heroAsset from "@/assets/sonic-crossworlds-official.webp.asset.json";
 import { ChatWidget } from "@/components/ChatWidget";
 import { CalMeetingButton } from "@/components/CalMeetingButton";
+import { ProposalRequestSection } from "@/components/ProposalRequestSection";
 
 const gameUrl = "https://asia.sega.com/SonicRacingCrossWorlds/en/";
 const trailerUrl = "https://www.youtube.com/watch?v=EbyfGzVPb-8";
@@ -137,6 +138,8 @@ function Index() {
               </div>
             </div>
           </section>
+
+          <ProposalRequestSection />
 
           <section id="faq" className="scroll-mt-24 py-19 md:py-24">
             <div className="reveal-on-scroll mb-10">
