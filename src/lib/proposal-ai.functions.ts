@@ -462,12 +462,16 @@ export const interpretProposalRequest = createServerFn({ method: "POST" })
           console.error("[email] proposal read failed", e);
         }
         // Record the email outcome on the proposal without touching other fields.
-        const markEmailResult = async (sent: boolean) => {
+        const markEmailResult = async (sent: boolean, error: string | null) => {
           const f: Record<string, unknown> = {
             email_sent: { booleanValue: sent },
             ...(sent
-              ? { sent_at: { timestampValue: new Date().toISOString() }, status: { stringValue: "sent" } }
-              : {}),
+              ? {
+                  sent_at: { timestampValue: new Date().toISOString() },
+                  status: { stringValue: "sent" },
+                  email_error: { nullValue: null },
+                }
+              : { email_error: { stringValue: (error ?? "Unknown email error").slice(0, 500) } }),
           };
           const m = Object.keys(f).map((k) => `updateMask.fieldPaths=${k}`).join("&");
           try {
