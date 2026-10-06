@@ -5,7 +5,8 @@ import { z } from "zod";
  * Server-only AI step: interprets a saved proposal request with Gemini and
  * writes `interpreted_request` onto the proposal document. GEMINI_API_KEY is
  * read inside the handler only, so it never reaches the browser bundle.
- * No pricing, proposal generation or email happens here.
+ * Also prices the selected services from Firestore `services.price` (never
+ * from Gemini). No proposal generation or email happens here.
  */
 
 const input = z.object({
@@ -19,7 +20,14 @@ export type InterpretedRequest = {
 };
 
 export type InterpretResult =
-  | { ok: true; interpreted: InterpretedRequest }
+  | {
+      ok: true;
+      interpreted: InterpretedRequest;
+      selected: Array<{ name: string; price: number; reason: string }>;
+      unmatched: Array<{ name: string; reason: string; issue: string }>;
+      total_price: number;
+      status: "calculated" | "no_matching_services";
+    }
   | { ok: false; code: InterpretErrorCode; message: string };
 
 export type InterpretErrorCode =
@@ -114,16 +122,21 @@ export const interpretProposalRequest = createServerFn({ method: "POST" })
     const base = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents`;
 
     // 1. Load the allowed services from Firestore.
-    let services: Array<{ name: string; description: string | undefined }> = [];
+    let services: Array<{ name: string; description: string | undefined; price: number | null }> = [];
     try {
       const res = await fetch(`${base}/services?pageSize=200&key=${fbKey}`);
       if (!res.ok) throw new Error(`Firestore ${res.status}: ${await res.text()}`);
       const body = (await res.json()) as { documents?: FsDoc[] };
       services = (body.documents ?? [])
-        .map((d) => ({
-          name: d.fields?.["name"]?.stringValue?.trim() ?? "",
-          description: d.fields?.["description"]?.stringValue?.trim(),
-        }))
+        .map((d) => {
+          const p = d.fields?.["price"] as { integerValue?: string; doubleValue?: number; stringValue?: string } | undefined;
+          const n = Number(p?.integerValue ?? p?.doubleValue ?? p?.stringValue ?? NaN);
+          return {
+            name: d.fields?.["name"]?.stringValue?.trim() ?? "",
+            description: d.fields?.["description"]?.stringValue?.trim(),
+            price: Number.isFinite(n) && n >= 0 ? n : null,
+          };
+        })
         .filter((s) => s.name);
     } catch (e) {
       console.error("services load failed", e);
@@ -224,55 +237,69 @@ export const interpretProposalRequest = createServerFn({ method: "POST" })
         .parse(JSON.parse(raw));
       interpreted = {
         summary: parsed.summary.trim(),
-        services: parsed.services
-          .filter((s) => allowed.includes(s.name))
-          .map((s) => ({ name: s.name, reason: s.reason.trim() })),
+        services: parsed.services.map((s) => ({ name: s.name.trim(), reason: s.reason.trim() })),
       };
     } catch (e) {
       console.error("gemini invalid json", raw, e);
       return fail("invalid_json", "The AI returned an invalid response.");
     }
-    if (!interpreted.summary || interpreted.services.length === 0) {
-      return fail("not_interpretable", "The request could not be matched to any of our services.");
+    if (!interpreted.summary) {
+      return fail("not_interpretable", "The request could not be interpreted.");
     }
 
-    // 4. Save onto the proposal document (only interpreted_request is touched).
+    // 4. Pricing — done here on the server, prices only from Firestore.
+    const byName = new Map(services.map((s) => [s.name.toLowerCase(), s]));
+    const selected: Array<{ name: string; price: number; reason: string }> = [];
+    const unmatched: Array<{ name: string; reason: string; issue: string }> = [];
+    const seen = new Set<string>();
+    for (const s of interpreted.services) {
+      const key = s.name.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const svc = byName.get(key);
+      if (!svc) {
+        unmatched.push({ ...s, issue: "not_in_services_collection" });
+      } else if (svc.price === null) {
+        console.error(`[pricing] service "${svc.name}" has a missing or invalid price`);
+        unmatched.push({ name: svc.name, reason: s.reason, issue: "missing_or_invalid_price" });
+      } else {
+        selected.push({ name: svc.name, price: svc.price, reason: s.reason });
+      }
+    }
+    const total = Math.round(selected.reduce((sum, s) => sum + s.price, 0) * 100) / 100;
+    const status = selected.length > 0 ? "calculated" : "no_matching_services";
+
+    // 5. Save — only these fields are touched; name/email/request/created_at stay as-is.
+    const str = (v: string) => ({ stringValue: v });
+    const map = (fields: Record<string, unknown>) => ({ mapValue: { fields } });
+    const arr = (values: unknown[]) => ({ arrayValue: { values } });
+    const fields = {
+      interpreted_request: map({
+        summary: str(interpreted.summary),
+        services: arr(interpreted.services.map((s) => map({ name: str(s.name), reason: str(s.reason) }))),
+      }),
+      selected_services: arr(
+        selected.map((s) => map({ name: str(s.name), price: { doubleValue: s.price }, reason: str(s.reason) })),
+      ),
+      unmatched_services: arr(
+        unmatched.map((s) => map({ name: str(s.name), reason: str(s.reason), issue: str(s.issue) })),
+      ),
+      total_price: { doubleValue: total },
+      status: str(status),
+    };
+    const mask = Object.keys(fields).map((f) => `updateMask.fieldPaths=${f}`).join("&");
     try {
-      const res = await fetch(
-        `${base}/proposals/${data.proposalId}?updateMask.fieldPaths=interpreted_request&key=${fbKey}`,
-        {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            fields: {
-              interpreted_request: {
-                mapValue: {
-                  fields: {
-                    summary: { stringValue: interpreted.summary },
-                    services: {
-                      arrayValue: {
-                        values: interpreted.services.map((s) => ({
-                          mapValue: {
-                            fields: {
-                              name: { stringValue: s.name },
-                              reason: { stringValue: s.reason },
-                            },
-                          },
-                        })),
-                      },
-                    },
-                  },
-                },
-              },
-            },
-          }),
-        },
-      );
+      const res = await fetch(`${base}/proposals/${data.proposalId}?${mask}&key=${fbKey}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fields }),
+      });
       if (!res.ok) throw new Error(`Firestore ${res.status}: ${await res.text()}`);
     } catch (e) {
       console.error("proposal update failed", e);
-      return fail("save_failed", "The interpretation could not be saved to the proposal.");
+      return fail("save_failed", "The interpretation and price could not be saved to the proposal.");
     }
+    console.info(`[pricing] proposal=${data.proposalId} status=${status} total=${total} selected=${selected.length} unmatched=${unmatched.length}`);
 
-    return { ok: true, interpreted };
+    return { ok: true, interpreted, selected, unmatched, total_price: total, status };
   });
