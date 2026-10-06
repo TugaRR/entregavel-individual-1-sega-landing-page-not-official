@@ -522,14 +522,17 @@ export const interpretProposalRequest = createServerFn({ method: "POST" })
             });
             if (!res.ok) {
               const body = await res.text();
+              // Log the exact Resend error so we can diagnose test-mode
+              // recipient restrictions, domain verification, invalid
+              // recipients, etc. Keys are never logged.
               console.error(`[email] gateway failed [${res.status}]: ${body}`);
               emailStatus = "failed";
-              emailError = `Email provider rejected the send (${res.status}).`;
-              await markEmailResult(false);
+              emailError = `Resend error ${res.status}: ${body.slice(0, 300)}`;
+              await markEmailResult(false, emailError);
             } else {
               emailStatus = "sent";
               finalStatus = "sent";
-              await markEmailResult(true);
+              await markEmailResult(true, null);
               console.info(`[email] proposal email sent to ${clientEmail} for ${proposalUrl}`);
             }
           } catch (e) {
