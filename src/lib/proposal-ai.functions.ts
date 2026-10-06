@@ -355,7 +355,7 @@ export const interpretProposalRequest = createServerFn({ method: "POST" })
           const doc = (await res.json()) as FsDoc;
           clientEmail = doc.fields?.["email"]?.stringValue?.trim() ?? "";
           clientName = doc.fields?.["name"]?.stringValue?.trim() ?? "";
-          alreadySent = doc.fields?.["email_sent"]?.booleanValue === true;
+          alreadySent = doc.fields?.["email_sent"]?.["booleanValue"] === true;
         } catch (e) {
           console.error("[email] proposal read failed", e);
         }
