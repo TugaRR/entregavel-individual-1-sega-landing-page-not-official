@@ -29,6 +29,8 @@ export type InterpretResult =
       total_price: number;
       status: "calculated" | "no_matching_services" | "proposal_ready";
       proposal_url: string | null;
+      email_status: "sent" | "failed" | "not_applicable";
+      email_error: string | null;
     }
   | { ok: false; code: InterpretErrorCode; message: string };
 
@@ -330,5 +332,88 @@ export const interpretProposalRequest = createServerFn({ method: "POST" })
       }
     }
 
-    return { ok: true, interpreted, selected, unmatched, total_price: total, status: finalStatus, proposal_url: proposalUrl };
+    // 7. Email the client once the proposal is ready. Sent via the Resend
+    // connector gateway; both keys stay server-side. A failure here never
+    // fails the proposal itself — it is reported in email_status.
+    let emailStatus: "sent" | "failed" | "not_applicable" = "not_applicable";
+    let emailError: string | null = null;
+    if (finalStatus === "proposal_ready" && proposalUrl) {
+      const lovableKey = process.env["LOVABLE_API_KEY"];
+      const resendKey = process.env["RESEND_API_KEY"];
+      if (!lovableKey || !resendKey) {
+        emailStatus = "failed";
+        emailError = "Email service is not configured on the server.";
+        console.error("[email] LOVABLE_API_KEY or RESEND_API_KEY missing");
+      } else {
+        // Read the client name/email from the proposal document.
+        let clientEmail = "";
+        let clientName = "";
+        try {
+          const res = await fetch(`${base}/proposals/${data.proposalId}?key=${fbKey}`);
+          if (!res.ok) throw new Error(`Firestore ${res.status}: ${await res.text()}`);
+          const doc = (await res.json()) as FsDoc;
+          clientEmail = doc.fields?.["email"]?.stringValue?.trim() ?? "";
+          clientName = doc.fields?.["name"]?.stringValue?.trim() ?? "";
+        } catch (e) {
+          console.error("[email] proposal read failed", e);
+        }
+        if (!clientEmail) {
+          emailStatus = "failed";
+          emailError = "Could not read the client email from the proposal.";
+        } else {
+          const totalFmt = total.toFixed(2);
+          const html = [
+            `<div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;padding:24px">`,
+            `<h1 style="font-size:20px;margin:0 0 12px">Your proposal is ready</h1>`,
+            `<p>Hi${clientName ? ` ${clientName}` : ""},</p>`,
+            `<p>We reviewed your request and prepared a proposal for you.</p>`,
+            `<p style="font-size:16px"><strong>Total: &euro;${totalFmt}</strong></p>`,
+            `<p><a href="${proposalUrl}" style="display:inline-block;background:#1d4ed8;color:#ffffff;text-decoration:none;padding:10px 18px;border-radius:8px">View your proposal</a></p>`,
+            `<p style="color:#666;font-size:12px">Or open this link: ${proposalUrl}</p>`,
+            `</div>`,
+          ].join("");
+          try {
+            const res = await fetch("https://connector-gateway.lovable.dev/resend/emails", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${lovableKey}`,
+                "X-Connection-Api-Key": resendKey,
+              },
+              body: JSON.stringify({
+                from: "SEGA Prototype <onboarding@resend.dev>",
+                to: [clientEmail],
+                subject: `Your proposal is ready — total €${totalFmt}`,
+                html,
+              }),
+            });
+            if (!res.ok) {
+              const body = await res.text();
+              console.error(`[email] gateway failed [${res.status}]: ${body}`);
+              emailStatus = "failed";
+              emailError = `Email provider rejected the send (${res.status}).`;
+            } else {
+              emailStatus = "sent";
+              console.info(`[email] proposal email sent to ${clientEmail} for ${proposalUrl}`);
+            }
+          } catch (e) {
+            console.error("[email] send failed", e);
+            emailStatus = "failed";
+            emailError = "The email could not be sent.";
+          }
+        }
+      }
+    }
+
+    return {
+      ok: true,
+      interpreted,
+      selected,
+      unmatched,
+      total_price: total,
+      status: finalStatus,
+      proposal_url: proposalUrl,
+      email_status: emailStatus,
+      email_error: emailError,
+    };
   });
