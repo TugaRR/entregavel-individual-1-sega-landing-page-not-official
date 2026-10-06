@@ -462,12 +462,16 @@ export const interpretProposalRequest = createServerFn({ method: "POST" })
           console.error("[email] proposal read failed", e);
         }
         // Record the email outcome on the proposal without touching other fields.
-        const markEmailResult = async (sent: boolean) => {
+        const markEmailResult = async (sent: boolean, error: string | null) => {
           const f: Record<string, unknown> = {
             email_sent: { booleanValue: sent },
             ...(sent
-              ? { sent_at: { timestampValue: new Date().toISOString() }, status: { stringValue: "sent" } }
-              : {}),
+              ? {
+                  sent_at: { timestampValue: new Date().toISOString() },
+                  status: { stringValue: "sent" },
+                  email_error: { nullValue: null },
+                }
+              : { email_error: { stringValue: (error ?? "Unknown email error").slice(0, 500) } }),
           };
           const m = Object.keys(f).map((k) => `updateMask.fieldPaths=${k}`).join("&");
           try {
@@ -518,21 +522,24 @@ export const interpretProposalRequest = createServerFn({ method: "POST" })
             });
             if (!res.ok) {
               const body = await res.text();
+              // Log the exact Resend error so we can diagnose test-mode
+              // recipient restrictions, domain verification, invalid
+              // recipients, etc. Keys are never logged.
               console.error(`[email] gateway failed [${res.status}]: ${body}`);
               emailStatus = "failed";
-              emailError = `Email provider rejected the send (${res.status}).`;
-              await markEmailResult(false);
+              emailError = `Resend error ${res.status}: ${body.slice(0, 300)}`;
+              await markEmailResult(false, emailError);
             } else {
               emailStatus = "sent";
               finalStatus = "sent";
-              await markEmailResult(true);
+              await markEmailResult(true, null);
               console.info(`[email] proposal email sent to ${clientEmail} for ${proposalUrl}`);
             }
           } catch (e) {
             console.error("[email] send failed", e);
             emailStatus = "failed";
-            emailError = "The email could not be sent.";
-            await markEmailResult(false);
+            emailError = `The email could not be sent: ${String(e).slice(0, 300)}`;
+            await markEmailResult(false, emailError);
           }
         }
       }
