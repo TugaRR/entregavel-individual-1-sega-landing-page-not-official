@@ -538,8 +538,8 @@ export const interpretProposalRequest = createServerFn({ method: "POST" })
           } catch (e) {
             console.error("[email] send failed", e);
             emailStatus = "failed";
-            emailError = "The email could not be sent.";
-            await markEmailResult(false);
+            emailError = `The email could not be sent: ${String(e).slice(0, 300)}`;
+            await markEmailResult(false, emailError);
           }
         }
       }
