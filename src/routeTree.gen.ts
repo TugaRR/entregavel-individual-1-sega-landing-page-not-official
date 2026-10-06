@@ -10,12 +10,18 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AdminProposalsRouteImport } from './routes/admin.proposals'
 import { Route as ApiChatRouteImport } from './routes/api/chat'
 import { Route as ProposalProposalIdRouteImport } from './routes/proposal.$proposalId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminProposalsRoute = AdminProposalsRouteImport.update({
+  id: '/admin/proposals',
+  path: '/admin/proposals',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiChatRoute = ApiChatRouteImport.update({
@@ -31,30 +37,39 @@ const ProposalProposalIdRoute = ProposalProposalIdRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/admin/proposals': typeof AdminProposalsRoute
   '/api/chat': typeof ApiChatRoute
   '/proposal/$proposalId': typeof ProposalProposalIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/admin/proposals': typeof AdminProposalsRoute
   '/api/chat': typeof ApiChatRoute
   '/proposal/$proposalId': typeof ProposalProposalIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/admin/proposals': typeof AdminProposalsRoute
   '/api/chat': typeof ApiChatRoute
   '/proposal/$proposalId': typeof ProposalProposalIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/api/chat' | '/proposal/$proposalId'
+  fullPaths: '/' | '/admin/proposals' | '/api/chat' | '/proposal/$proposalId'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/api/chat' | '/proposal/$proposalId'
-  id: '__root__' | '/' | '/api/chat' | '/proposal/$proposalId'
+  to: '/' | '/admin/proposals' | '/api/chat' | '/proposal/$proposalId'
+  id:
+    | '__root__'
+    | '/'
+    | '/admin/proposals'
+    | '/api/chat'
+    | '/proposal/$proposalId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AdminProposalsRoute: typeof AdminProposalsRoute
   ApiChatRoute: typeof ApiChatRoute
   ProposalProposalIdRoute: typeof ProposalProposalIdRoute
 }
@@ -66,6 +81,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/proposals': {
+      id: '/admin/proposals'
+      path: '/admin/proposals'
+      fullPath: '/admin/proposals'
+      preLoaderRoute: typeof AdminProposalsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/chat': {
@@ -87,6 +109,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AdminProposalsRoute: AdminProposalsRoute,
   ApiChatRoute: ApiChatRoute,
   ProposalProposalIdRoute: ProposalProposalIdRoute,
 }

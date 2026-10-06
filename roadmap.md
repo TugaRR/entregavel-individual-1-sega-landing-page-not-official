@@ -8,3 +8,4 @@
 - [x] Gemini interprets proposal requests into `interpreted_request` (no pricing/HTML/email yet).
 - [x] Server-side pricing from Firestore services.price → selected_services, total_price, status.
 - [ ] Proposal page /proposal/{id} + proposal_url/status proposal_ready. Built; blocked on Firestore rule allowing `get` on proposals.
+- [ ] Proposals dashboard /admin/proposals. Built; blocked on Firestore rule allowing `list` on proposals.
