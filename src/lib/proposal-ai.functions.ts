@@ -31,7 +31,65 @@ export type InterpretErrorCode =
   | "not_interpretable"
   | "save_failed";
 
-const GEMINI_MODEL = "gemini-2.5-flash";
+// gemini-2.5-flash was retired for new keys (404). Current model first,
+// previous current model as fallback when the first is overloaded.
+const GEMINI_MODELS = ["gemini-3.8-flash", "gemini-3.7-flash"] as const;
+const GEMINI_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models";
+
+type GeminiErrorKind =
+  | "model_unavailable"
+  | "auth_failed"
+  | "key_restricted"
+  | "quota_exceeded"
+  | "rate_limited"
+  | "overloaded"
+  | "bad_request"
+  | "network"
+  | "empty_response"
+  | "unknown";
+
+type GeminiFailure = { model: string; status: number; kind: GeminiErrorKind; detail: string };
+
+/** Classifies a Gemini error response. Never includes the API key. */
+async function describeGeminiError(res: Response, model: string): Promise<GeminiFailure> {
+  const text = await res.text();
+  let message = text.slice(0, 500);
+  let status = "";
+  let reason = "";
+  try {
+    const j = JSON.parse(text) as {
+      error?: { message?: string; status?: string; details?: Array<{ reason?: string }> };
+    };
+    message = j.error?.message ?? message;
+    status = j.error?.status ?? "";
+    reason = j.error?.details?.map((d) => d.reason).filter(Boolean).join(",") ?? "";
+  } catch {
+    /* non-JSON body */
+  }
+  const m = `${message} ${reason}`.toLowerCase();
+  let kind: GeminiErrorKind = "unknown";
+  if (res.status === 404 || m.includes("no longer available") || m.includes("not found for api version")) kind = "model_unavailable";
+  else if (m.includes("api_key_invalid") || m.includes("api key not valid") || res.status === 401) kind = "auth_failed";
+  else if (res.status === 403 && (m.includes("referer") || m.includes("restrict") || m.includes("blocked") || m.includes("ip address"))) kind = "key_restricted";
+  else if (res.status === 403) kind = "auth_failed";
+  else if (res.status === 429 && (m.includes("quota") || m.includes("billing"))) kind = "quota_exceeded";
+  else if (res.status === 429) kind = "rate_limited";
+  else if (res.status === 503 || res.status === 500 || status === "UNAVAILABLE") kind = "overloaded";
+  else if (res.status === 400) kind = "bad_request";
+  return { model, status: res.status, kind, detail: `${status} ${message}${reason ? ` [${reason}]` : ""}`.trim() };
+}
+
+function geminiUserMessage(kind: GeminiErrorKind): string {
+  switch (kind) {
+    case "model_unavailable": return "The AI model is unavailable.";
+    case "auth_failed": return "The AI service rejected the server's API key.";
+    case "key_restricted": return "The AI API key is restricted and cannot be used from this server.";
+    case "quota_exceeded": return "The AI quota has been exceeded.";
+    case "rate_limited":
+    case "overloaded": return "The AI service is busy right now. Please try again shortly.";
+    default: return "The AI service could not be reached.";
+  }
+}
 
 type FsValue = { stringValue?: string; [k: string]: unknown };
 type FsDoc = { name: string; fields?: Record<string, FsValue> };
@@ -88,47 +146,70 @@ export const interpretProposalRequest = createServerFn({ method: "POST" })
       data.request,
     ].join("\n");
 
-    let raw: string;
-    try {
-      const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "x-goog-api-key": geminiKey },
-          body: JSON.stringify({
-            contents: [{ role: "user", parts: [{ text: prompt }] }],
-            generationConfig: {
-              responseMimeType: "application/json",
-              responseSchema: {
+    const requestBody = JSON.stringify({
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      generationConfig: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: "OBJECT",
+          properties: {
+            summary: { type: "STRING" },
+            services: {
+              type: "ARRAY",
+              items: {
                 type: "OBJECT",
                 properties: {
-                  summary: { type: "STRING" },
-                  services: {
-                    type: "ARRAY",
-                    items: {
-                      type: "OBJECT",
-                      properties: {
-                        name: { type: "STRING", enum: allowed },
-                        reason: { type: "STRING" },
-                      },
-                      required: ["name", "reason"],
-                    },
-                  },
+                  name: { type: "STRING", enum: allowed },
+                  reason: { type: "STRING" },
                 },
-                required: ["summary", "services"],
+                required: ["name", "reason"],
               },
             },
-          }),
+          },
+          required: ["summary", "services"],
         },
-      );
-      if (!res.ok) throw new Error(`Gemini ${res.status}: ${await res.text()}`);
-      const body = (await res.json()) as {
-        candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
-      };
-      raw = body.candidates?.[0]?.content?.parts?.map((p) => p.text ?? "").join("") ?? "";
-    } catch (e) {
-      console.error("gemini call failed", e);
-      return fail("gemini_failed", "The AI service could not be reached.");
+      },
+    });
+
+    let raw = "";
+    let lastError: GeminiFailure | null = null;
+    outer: for (const model of GEMINI_MODELS) {
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+          const res = await fetch(`${GEMINI_ENDPOINT}/${model}:generateContent`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "x-goog-api-key": geminiKey },
+            body: requestBody,
+          });
+          if (res.ok) {
+            const body = (await res.json()) as {
+              candidates?: Array<{ content?: { parts?: Array<{ text?: string; thought?: boolean }> } }>;
+            };
+            raw =
+              body.candidates?.[0]?.content?.parts
+                ?.filter((p) => !p.thought)
+                .map((p) => p.text ?? "")
+                .join("") ?? "";
+            console.info(`[gemini] ok model=${model} attempt=${attempt}`);
+            lastError = null;
+            break outer;
+          }
+          lastError = await describeGeminiError(res, model);
+        } catch (e) {
+          lastError = { model, status: 0, kind: "network", detail: String(e) };
+        }
+        console.error(
+          `[gemini] failed model=${lastError.model} status=${lastError.status} kind=${lastError.kind} attempt=${attempt}: ${lastError.detail}`,
+        );
+        // Only busy/overloaded/network errors are worth retrying.
+        if (!["overloaded", "rate_limited", "network"].includes(lastError.kind)) break;
+        if (attempt < 3) await new Promise((r) => setTimeout(r, 800 * attempt));
+      }
+      // Auth / key problems won't be fixed by another model.
+      if (lastError && ["auth_failed", "key_restricted", "quota_exceeded"].includes(lastError.kind)) break;
+    }
+    if (lastError || !raw) {
+      return fail("gemini_failed", geminiUserMessage(lastError?.kind ?? "empty_response"));
     }
 
     // 3. Validate the JSON and drop anything not in the services list.
