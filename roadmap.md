@@ -5,3 +5,4 @@
 - [x] Use official related artwork; check mobile, desktop, and links.
 - [x] Add "Request a Proposal" section: name, email, request, validation, submit button.
 - [x] Wire proposal form to Firestore collection `proposals` (status "received", created_at). Done, but blocked on user filling VITE_FIREBASE_* values in .env.
+- [x] Gemini interprets proposal requests into `interpreted_request` (no pricing/HTML/email yet).

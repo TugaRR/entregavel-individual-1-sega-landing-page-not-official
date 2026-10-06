@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
+import { interpretProposalRequest } from "@/lib/proposal-ai.functions";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { ArrowRight, CheckCircle2, Clock, Inbox, SendHorizontal } from "lucide-react";
@@ -39,11 +41,20 @@ export function ProposalRequestSection() {
 
   const [error, setError] = useState<string | null>(null);
   const busy = form.formState.isSubmitting;
+  const interpret = useServerFn(interpretProposalRequest);
+  const [aiNote, setAiNote] = useState<string | null>(null);
 
   async function onSubmit(values: ProposalRequestValues) {
     setError(null);
     try {
       const { record } = await submitProposalRequest(values);
+      try {
+        const ai = await interpret({ data: { proposalId: record.id, request: record.request } });
+        setAiNote(ai.ok ? null : `Your request was saved, but the automatic review step failed: ${ai.message}`);
+      } catch (aiErr) {
+        console.error("AI interpretation failed:", aiErr);
+        setAiNote("Your request was saved, but the automatic review step failed. We'll review it by hand.");
+      }
       form.reset({ name: "", email: "", request: "" });
       setSaved(record);
     } catch (e) {
@@ -98,6 +109,11 @@ export function ProposalRequestSection() {
                 Your request is logged as reference {saved.id.slice(0, 8)} and we’ll reply to{" "}
                 <span className="text-foreground">{saved.email}</span>.
               </p>
+              {aiNote && (
+                <p role="alert" className="mx-auto mt-4 max-w-[42ch] rounded-md border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive">
+                  {aiNote}
+                </p>
+              )}
               <div className="mt-8">
                 <Button
                   size="lg"
@@ -105,6 +121,7 @@ export function ProposalRequestSection() {
                   onClick={() => {
                     form.reset({ name: "", email: "", request: "" });
                     setSaved(null);
+                    setAiNote(null);
                   }}
                 >
                   Send another request
