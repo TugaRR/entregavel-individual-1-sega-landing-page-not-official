@@ -43,9 +43,9 @@ export type InterpretErrorCode =
   | "not_interpretable"
   | "save_failed";
 
-// gemini-2.5-flash was retired for new keys (404). Current model first,
-// previous current model as fallback when the first is overloaded.
-const GEMINI_MODELS = ["gemini-3.8-flash", "gemini-3.7-flash"] as const;
+// gemini-2.5-flash was retired for new keys (404). Quotas are per model, so
+// a 429/quota error on one model moves on to the next.
+const GEMINI_MODELS = ["gemini-3.7-flash", "gemini-3.8-flash"] as const;
 const GEMINI_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models";
 
 type GeminiErrorKind =
@@ -223,8 +223,8 @@ export const interpretProposalRequest = createServerFn({ method: "POST" })
         if (!["overloaded", "rate_limited", "network"].includes(lastError.kind)) break;
         if (attempt < 3) await new Promise((r) => setTimeout(r, 800 * attempt));
       }
-      // Auth / key problems won't be fixed by another model.
-      if (lastError && ["auth_failed", "key_restricted", "quota_exceeded"].includes(lastError.kind)) break;
+      // Auth / key problems won't be fixed by another model; quota is per model, so continue.
+      if (lastError && ["auth_failed", "key_restricted"].includes(lastError.kind)) break;
     }
     if (lastError || !raw) {
       return fail("gemini_failed", geminiUserMessage(lastError?.kind ?? "empty_response"));
