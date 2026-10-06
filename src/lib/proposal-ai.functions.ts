@@ -348,16 +348,43 @@ export const interpretProposalRequest = createServerFn({ method: "POST" })
         // Read the client name/email from the proposal document.
         let clientEmail = "";
         let clientName = "";
+        let alreadySent = false;
         try {
           const res = await fetch(`${base}/proposals/${data.proposalId}?key=${fbKey}`);
           if (!res.ok) throw new Error(`Firestore ${res.status}: ${await res.text()}`);
           const doc = (await res.json()) as FsDoc;
           clientEmail = doc.fields?.["email"]?.stringValue?.trim() ?? "";
           clientName = doc.fields?.["name"]?.stringValue?.trim() ?? "";
+          alreadySent = doc.fields?.["email_sent"]?.booleanValue === true;
         } catch (e) {
           console.error("[email] proposal read failed", e);
         }
-        if (!clientEmail) {
+        // Record the email outcome on the proposal without touching other fields.
+        const markEmailResult = async (sent: boolean) => {
+          const f: Record<string, unknown> = {
+            email_sent: { booleanValue: sent },
+            ...(sent
+              ? { sent_at: { timestampValue: new Date().toISOString() }, status: { stringValue: "sent" } }
+              : {}),
+          };
+          const m = Object.keys(f).map((k) => `updateMask.fieldPaths=${k}`).join("&");
+          try {
+            const res = await fetch(`${base}/proposals/${data.proposalId}?${m}&key=${fbKey}`, {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ fields: f }),
+            });
+            if (!res.ok) throw new Error(`Firestore ${res.status}: ${await res.text()}`);
+          } catch (e) {
+            console.error("[email] status save failed", e);
+          }
+        };
+        if (alreadySent) {
+          // Never send a duplicate: the proposal was already emailed.
+          emailStatus = "sent";
+          finalStatus = "sent";
+          console.info(`[email] skipped duplicate send for ${data.proposalId}`);
+        } else if (!clientEmail) {
           emailStatus = "failed";
           emailError = "Could not read the client email from the proposal.";
         } else {
