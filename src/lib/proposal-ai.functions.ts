@@ -27,7 +27,7 @@ export type InterpretResult =
       selected: Array<{ name: string; price: number; reason: string }>;
       unmatched: Array<{ name: string; reason: string; issue: string }>;
       total_price: number;
-      status: "calculated" | "no_matching_services" | "proposal_ready";
+      status: "calculated" | "no_matching_services" | "proposal_ready" | "sent";
       proposal_url: string | null;
       email_status: "sent" | "failed" | "not_applicable";
       email_error: string | null;
@@ -306,7 +306,7 @@ export const interpretProposalRequest = createServerFn({ method: "POST" })
     console.info(`[pricing] proposal=${data.proposalId} status=${status} total=${total} selected=${selected.length} unmatched=${unmatched.length}`);
 
     // 6. Proposal page: for calculated proposals, record the public page URL.
-    let finalStatus: "calculated" | "no_matching_services" | "proposal_ready" = status;
+    let finalStatus: "calculated" | "no_matching_services" | "proposal_ready" | "sent" = status;
     let proposalUrl: string | null = null;
     if (status === "calculated") {
       const req = getRequest();
