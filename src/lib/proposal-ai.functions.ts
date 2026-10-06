@@ -27,7 +27,7 @@ export type InterpretResult =
       selected: Array<{ name: string; price: number; reason: string }>;
       unmatched: Array<{ name: string; reason: string; issue: string }>;
       total_price: number;
-      status: "calculated" | "no_matching_services" | "proposal_ready";
+      status: "calculated" | "no_matching_services" | "proposal_ready" | "sent";
       proposal_url: string | null;
       email_status: "sent" | "failed" | "not_applicable";
       email_error: string | null;
@@ -306,7 +306,7 @@ export const interpretProposalRequest = createServerFn({ method: "POST" })
     console.info(`[pricing] proposal=${data.proposalId} status=${status} total=${total} selected=${selected.length} unmatched=${unmatched.length}`);
 
     // 6. Proposal page: for calculated proposals, record the public page URL.
-    let finalStatus: "calculated" | "no_matching_services" | "proposal_ready" = status;
+    let finalStatus: "calculated" | "no_matching_services" | "proposal_ready" | "sent" = status;
     let proposalUrl: string | null = null;
     if (status === "calculated") {
       const req = getRequest();
@@ -348,16 +348,43 @@ export const interpretProposalRequest = createServerFn({ method: "POST" })
         // Read the client name/email from the proposal document.
         let clientEmail = "";
         let clientName = "";
+        let alreadySent = false;
         try {
           const res = await fetch(`${base}/proposals/${data.proposalId}?key=${fbKey}`);
           if (!res.ok) throw new Error(`Firestore ${res.status}: ${await res.text()}`);
           const doc = (await res.json()) as FsDoc;
           clientEmail = doc.fields?.["email"]?.stringValue?.trim() ?? "";
           clientName = doc.fields?.["name"]?.stringValue?.trim() ?? "";
+          alreadySent = doc.fields?.["email_sent"]?.["booleanValue"] === true;
         } catch (e) {
           console.error("[email] proposal read failed", e);
         }
-        if (!clientEmail) {
+        // Record the email outcome on the proposal without touching other fields.
+        const markEmailResult = async (sent: boolean) => {
+          const f: Record<string, unknown> = {
+            email_sent: { booleanValue: sent },
+            ...(sent
+              ? { sent_at: { timestampValue: new Date().toISOString() }, status: { stringValue: "sent" } }
+              : {}),
+          };
+          const m = Object.keys(f).map((k) => `updateMask.fieldPaths=${k}`).join("&");
+          try {
+            const res = await fetch(`${base}/proposals/${data.proposalId}?${m}&key=${fbKey}`, {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ fields: f }),
+            });
+            if (!res.ok) throw new Error(`Firestore ${res.status}: ${await res.text()}`);
+          } catch (e) {
+            console.error("[email] status save failed", e);
+          }
+        };
+        if (alreadySent) {
+          // Never send a duplicate: the proposal was already emailed.
+          emailStatus = "sent";
+          finalStatus = "sent";
+          console.info(`[email] skipped duplicate send for ${data.proposalId}`);
+        } else if (!clientEmail) {
           emailStatus = "failed";
           emailError = "Could not read the client email from the proposal.";
         } else {
@@ -392,14 +419,18 @@ export const interpretProposalRequest = createServerFn({ method: "POST" })
               console.error(`[email] gateway failed [${res.status}]: ${body}`);
               emailStatus = "failed";
               emailError = `Email provider rejected the send (${res.status}).`;
+              await markEmailResult(false);
             } else {
               emailStatus = "sent";
+              finalStatus = "sent";
+              await markEmailResult(true);
               console.info(`[email] proposal email sent to ${clientEmail} for ${proposalUrl}`);
             }
           } catch (e) {
             console.error("[email] send failed", e);
             emailStatus = "failed";
             emailError = "The email could not be sent.";
+            await markEmailResult(false);
           }
         }
       }
