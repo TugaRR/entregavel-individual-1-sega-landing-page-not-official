@@ -110,6 +110,90 @@ function fail(code: InterpretErrorCode, message: string): InterpretResult {
   return { ok: false, code, message };
 }
 
+/** Lovable AI Gateway fallback (Responses API, streamed). Key stays server-side. */
+async function callLovableFallback(
+  prompt: string,
+  allowed: string[],
+): Promise<{ ok: true; text: string } | { ok: false; detail: string }> {
+  const key = process.env["LOVABLE_API_KEY"];
+  if (!key) return { ok: false, detail: "LOVABLE_API_KEY missing" };
+  try {
+    const res = await fetch("https://ai.gateway.lovable.dev/v1/responses", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${key}`,
+        "X-Lovable-AIG-SDK": "fetch",
+      },
+      body: JSON.stringify({
+        model: "openai/gpt-6-astra",
+        stream: true,
+        store: false,
+        reasoning: { effort: "low" },
+        input: [{ role: "user", content: prompt }],
+        text: {
+          format: {
+            type: "json_schema",
+            name: "interpreted_request",
+            strict: true,
+            schema: {
+              type: "object",
+              additionalProperties: false,
+              required: ["summary", "services"],
+              properties: {
+                summary: { type: "string" },
+                services: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    additionalProperties: false,
+                    required: ["name", "reason"],
+                    properties: {
+                      name: { type: "string", enum: allowed },
+                      reason: { type: "string" },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      }),
+    });
+    if (!res.ok || !res.body) {
+      return { ok: false, detail: `status=${res.status} ${(await res.text()).slice(0, 300)}` };
+    }
+    const reader = res.body.getReader();
+    const dec = new TextDecoder();
+    let buf = "";
+    let text = "";
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      const lines = buf.split("\n");
+      buf = lines.pop() ?? "";
+      for (const line of lines) {
+        if (!line.startsWith("data:")) continue;
+        const d = line.slice(5).trim();
+        if (!d || d === "[DONE]") continue;
+        try {
+          const ev = JSON.parse(d) as { type?: string; delta?: string; response?: { error?: { message?: string } } };
+          if (ev.type === "response.output_text.delta" && ev.delta) text += ev.delta;
+          if (ev.type === "response.failed" || ev.type === "error") {
+            return { ok: false, detail: `stream error ${ev.response?.error?.message ?? d.slice(0, 200)}` };
+          }
+        } catch {
+          /* partial/non-JSON frame */
+        }
+      }
+    }
+    return text ? { ok: true, text } : { ok: false, detail: "empty response" };
+  } catch (e) {
+    return { ok: false, detail: String(e) };
+  }
+}
+
 export const interpretProposalRequest = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => input.parse(d))
   .handler(async ({ data }): Promise<InterpretResult> => {
@@ -228,6 +312,21 @@ export const interpretProposalRequest = createServerFn({ method: "POST" })
       }
       // Auth / key problems won't be fixed by another model; quota is per model, so continue.
       if (lastError && ["auth_failed", "key_restricted"].includes(lastError.kind)) break;
+    }
+    // Fallback: only for temporary availability failures (503/502/504/524,
+    // timeout, busy, quota). Same prompt, same strict schema with the same
+    // allowed-name enum. Never used for auth, config or invalid requests.
+    const TEMPORARY: GeminiErrorKind[] = ["overloaded", "network", "rate_limited", "quota_exceeded"];
+    if (lastError && TEMPORARY.includes(lastError.kind)) {
+      console.warn(`[fallback] Gemini unavailable (${lastError.kind}); using Lovable AI`);
+      const fb = await callLovableFallback(prompt, allowed);
+      if (fb.ok) {
+        raw = fb.text;
+        lastError = null;
+        console.info("[fallback] ok model=openai/gpt-6-astra");
+      } else {
+        console.error(`[fallback] failed: ${fb.detail}`);
+      }
     }
     if (lastError || !raw) {
       return fail("gemini_failed", geminiUserMessage(lastError?.kind ?? "empty_response"));
