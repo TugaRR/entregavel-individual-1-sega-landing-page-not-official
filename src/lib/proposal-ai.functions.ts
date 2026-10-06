@@ -103,6 +103,7 @@ export const interpretProposalRequest = createServerFn({ method: "POST" })
   .handler(async ({ data }): Promise<InterpretResult> => {
     const geminiKey = process.env["GEMINI_API_KEY"];
     if (!geminiKey) {
+      console.error("[gemini] GEMINI_API_KEY missing at runtime");
       return fail("missing_key", "GEMINI_API_KEY is not configured on the server.");
     }
     const projectId = process.env["VITE_FIREBASE_PROJECT_ID"] ?? import.meta.env["VITE_FIREBASE_PROJECT_ID"];
