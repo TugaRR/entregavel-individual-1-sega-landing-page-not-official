@@ -86,7 +86,7 @@ async function describeGeminiError(res: Response, model: string): Promise<Gemini
   else if (res.status === 403) kind = "auth_failed";
   else if (res.status === 429 && (m.includes("quota") || m.includes("billing"))) kind = "quota_exceeded";
   else if (res.status === 429) kind = "rate_limited";
-  else if (res.status === 503 || res.status === 500 || status === "UNAVAILABLE") kind = "overloaded";
+  else if ([500, 502, 503, 504, 524].includes(res.status) || status === "UNAVAILABLE") kind = "overloaded";
   else if (res.status === 400) kind = "bad_request";
   return { model, status: res.status, kind, detail: `${status} ${message}${reason ? ` [${reason}]` : ""}`.trim() };
 }
@@ -194,10 +194,13 @@ export const interpretProposalRequest = createServerFn({ method: "POST" })
     outer: for (const model of GEMINI_MODELS) {
       for (let attempt = 1; attempt <= 3; attempt++) {
         try {
+          // A hung request (seen in production as a 524 after ~2 min) is cut
+          // off at 30s so the next attempt/model still has time to answer.
           const res = await fetch(`${GEMINI_ENDPOINT}/${model}:generateContent`, {
             method: "POST",
             headers: { "Content-Type": "application/json", "x-goog-api-key": geminiKey },
             body: requestBody,
+            signal: AbortSignal.timeout(30000),
           });
           if (res.ok) {
             const body = (await res.json()) as {
