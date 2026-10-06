@@ -57,7 +57,8 @@ export const getProposal = createServerFn({ method: "GET" })
       }
       const f = ((await res.json()) as { fields?: Record<string, V> }).fields ?? {};
       const status = s(f["status"]);
-      if (status !== "proposal_ready" && status !== "calculated") return { ok: false, reason: "not_ready" };
+      // "sent" = proposal_ready + emailed; still a completed proposal.
+      if (!["proposal_ready", "calculated", "sent"].includes(status)) return { ok: false, reason: "not_ready" };
       const services = (f["selected_services"]?.arrayValue?.values ?? []).map((v) => {
         const m = v.mapValue?.fields ?? {};
         return { name: s(m["name"]), price: n(m["price"]), reason: s(m["reason"]) };
