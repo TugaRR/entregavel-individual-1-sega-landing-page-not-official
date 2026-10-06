@@ -440,12 +440,13 @@ export const interpretProposalRequest = createServerFn({ method: "POST" })
     let emailStatus: "sent" | "failed" | "not_applicable" = "not_applicable";
     let emailError: string | null = null;
     if (finalStatus === "proposal_ready" && proposalUrl) {
-      const lovableKey = process.env["LOVABLE_API_KEY"];
-      const resendKey = process.env["RESEND_API_KEY"];
-      if (!lovableKey || !resendKey) {
+      const nylasKey = process.env["NYLAS_API_KEY"];
+      const nylasGrant = process.env["NYLAS_GRANT_ID"];
+      const NYLAS_SENDER = "proposal_agent@sega-not-official-proposals.nylas.email";
+      if (!nylasKey || !nylasGrant) {
         emailStatus = "failed";
-        emailError = "Email service is not configured on the server.";
-        console.error("[email] LOVABLE_API_KEY or RESEND_API_KEY missing");
+        emailError = "Email service is not configured on the server (NYLAS_API_KEY / NYLAS_GRANT_ID).";
+        console.error("[email] NYLAS_API_KEY or NYLAS_GRANT_ID missing");
       } else {
         // Read the client name/email from the proposal document.
         let clientEmail = "";
@@ -505,29 +506,44 @@ export const interpretProposalRequest = createServerFn({ method: "POST" })
             `<p style="color:#666;font-size:12px">Or open this link: ${proposalUrl}</p>`,
             `</div>`,
           ].join("");
+          const text = [
+            `Hi${clientName ? ` ${clientName}` : ""},`,
+            ``,
+            `Thank you for your request. Your SEGA proposal is ready.`,
+            ``,
+            `Total: €${totalFmt}`,
+            ``,
+            `View your proposal: ${proposalUrl}`,
+          ].join("\n");
           try {
-            const res = await fetch("https://connector-gateway.lovable.dev/resend/emails", {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${lovableKey}`,
-                "X-Connection-Api-Key": resendKey,
+            // Nylas Email API (v3) — server-side only; the key never reaches the browser.
+            const res = await fetch(
+              `https://api.us.nylas.com/v3/grants/${encodeURIComponent(nylasGrant)}/messages/send`,
+              {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  Accept: "application/json",
+                  Authorization: `Bearer ${nylasKey}`,
+                },
+                body: JSON.stringify({
+                  from: [{ name: "SEGA Proposals", email: NYLAS_SENDER }],
+                  to: [{ name: clientName || clientEmail, email: clientEmail }],
+                  subject: "Your SEGA Proposal",
+                  // Nylas sends `body` as HTML; the plain-text version is
+                  // appended as a <pre> fallback for text-only readers.
+                  body: `${html}<!-- plain text -->\n<div style="display:none">${text
+                    .replace(/&/g, "&amp;")
+                    .replace(/</g, "&lt;")}</div>`,
+                }),
               },
-              body: JSON.stringify({
-                from: "SEGA Prototype <onboarding@resend.dev>",
-                to: [clientEmail],
-                subject: `Your proposal is ready — total €${totalFmt}`,
-                html,
-              }),
-            });
+            );
             if (!res.ok) {
               const body = await res.text();
-              // Log the exact Resend error so we can diagnose test-mode
-              // recipient restrictions, domain verification, invalid
-              // recipients, etc. Keys are never logged.
-              console.error(`[email] gateway failed [${res.status}]: ${body}`);
+              // Log the exact Nylas error. Keys are never logged.
+              console.error(`[email] Nylas send failed [${res.status}]: ${body}`);
               emailStatus = "failed";
-              emailError = `Resend error ${res.status}: ${body.slice(0, 300)}`;
+              emailError = `Nylas error ${res.status}: ${body.slice(0, 300)}`;
               await markEmailResult(false, emailError);
             } else {
               emailStatus = "sent";
