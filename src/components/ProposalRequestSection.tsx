@@ -43,14 +43,25 @@ export function ProposalRequestSection() {
   const busy = form.formState.isSubmitting;
   const interpret = useServerFn(interpretProposalRequest);
   const [aiNote, setAiNote] = useState<string | null>(null);
+  const [emailNote, setEmailNote] = useState<string | null>(null);
 
   async function onSubmit(values: ProposalRequestValues) {
     setError(null);
+    setEmailNote(null);
     try {
       const { record } = await submitProposalRequest(values);
       try {
         const ai = await interpret({ data: { proposalId: record.id, request: record.request } });
         setAiNote(ai.ok ? null : `Your request was saved, but the automatic review step failed: ${ai.message}`);
+        if (ai.ok && ai.status === "proposal_ready") {
+          setEmailNote(
+            ai.email_status === "sent"
+              ? "A copy of your proposal was emailed to you."
+              : ai.email_status === "failed"
+                ? "Your proposal is ready, but the confirmation email could not be sent."
+                : null,
+          );
+        }
       } catch (aiErr) {
         console.error("AI interpretation failed:", aiErr);
         setAiNote("Your request was saved, but the automatic review step failed. We'll review it by hand.");
