@@ -125,6 +125,11 @@ export function ProposalRequestSection() {
                   {aiNote}
                 </p>
               )}
+              {emailNote && (
+                <p className="mx-auto mt-4 max-w-[42ch] rounded-md border border-primary/30 bg-primary/10 p-3 text-xs text-foreground">
+                  {emailNote}
+                </p>
+              )}
               <div className="mt-8">
                 <Button
                   size="lg"
@@ -133,6 +138,7 @@ export function ProposalRequestSection() {
                     form.reset({ name: "", email: "", request: "" });
                     setSaved(null);
                     setAiNote(null);
+                    setEmailNote(null);
                   }}
                 >
                   Send another request
