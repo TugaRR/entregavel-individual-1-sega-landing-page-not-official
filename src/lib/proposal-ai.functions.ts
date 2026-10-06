@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import { getRequest } from "@tanstack/react-start/server";
 import { z } from "zod";
 
 /**
@@ -26,7 +27,8 @@ export type InterpretResult =
       selected: Array<{ name: string; price: number; reason: string }>;
       unmatched: Array<{ name: string; reason: string; issue: string }>;
       total_price: number;
-      status: "calculated" | "no_matching_services";
+      status: "calculated" | "no_matching_services" | "proposal_ready";
+      proposal_url: string | null;
     }
   | { ok: false; code: InterpretErrorCode; message: string };
 
