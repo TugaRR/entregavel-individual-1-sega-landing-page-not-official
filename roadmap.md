@@ -7,3 +7,4 @@
 - [x] Wire proposal form to Firestore collection `proposals` (status "received", created_at). Done, but blocked on user filling VITE_FIREBASE_* values in .env.
 - [x] Gemini interprets proposal requests into `interpreted_request` (no pricing/HTML/email yet).
 - [x] Server-side pricing from Firestore services.price → selected_services, total_price, status.
+- [ ] Proposal page /proposal/{id} + proposal_url/status proposal_ready. Built; blocked on Firestore rule allowing `get` on proposals.

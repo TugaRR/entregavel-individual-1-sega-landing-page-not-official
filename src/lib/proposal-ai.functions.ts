@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import { getRequest } from "@tanstack/react-start/server";
 import { z } from "zod";
 
 /**
@@ -26,7 +27,8 @@ export type InterpretResult =
       selected: Array<{ name: string; price: number; reason: string }>;
       unmatched: Array<{ name: string; reason: string; issue: string }>;
       total_price: number;
-      status: "calculated" | "no_matching_services";
+      status: "calculated" | "no_matching_services" | "proposal_ready";
+      proposal_url: string | null;
     }
   | { ok: false; code: InterpretErrorCode; message: string };
 
@@ -301,5 +303,32 @@ export const interpretProposalRequest = createServerFn({ method: "POST" })
     }
     console.info(`[pricing] proposal=${data.proposalId} status=${status} total=${total} selected=${selected.length} unmatched=${unmatched.length}`);
 
-    return { ok: true, interpreted, selected, unmatched, total_price: total, status };
+    // 6. Proposal page: for calculated proposals, record the public page URL.
+    let finalStatus: "calculated" | "no_matching_services" | "proposal_ready" = status;
+    let proposalUrl: string | null = null;
+    if (status === "calculated") {
+      const req = getRequest();
+      const origin = req.headers.get("origin") ?? new URL(req.url).origin;
+      proposalUrl = `${origin}/proposal/${data.proposalId}`;
+      try {
+        const res = await fetch(
+          `${base}/proposals/${data.proposalId}?updateMask.fieldPaths=proposal_url&updateMask.fieldPaths=status&key=${fbKey}`,
+          {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              fields: { proposal_url: { stringValue: proposalUrl }, status: { stringValue: "proposal_ready" } },
+            }),
+          },
+        );
+        if (!res.ok) throw new Error(`Firestore ${res.status}: ${await res.text()}`);
+        finalStatus = "proposal_ready";
+        console.info(`[proposal] ready ${proposalUrl}`);
+      } catch (e) {
+        console.error("proposal_url save failed", e);
+        proposalUrl = null;
+      }
+    }
+
+    return { ok: true, interpreted, selected, unmatched, total_price: total, status: finalStatus, proposal_url: proposalUrl };
   });
