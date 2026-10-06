@@ -5,7 +5,8 @@ import { z } from "zod";
  * Server-only AI step: interprets a saved proposal request with Gemini and
  * writes `interpreted_request` onto the proposal document. GEMINI_API_KEY is
  * read inside the handler only, so it never reaches the browser bundle.
- * No pricing, proposal generation or email happens here.
+ * Also prices the selected services from Firestore `services.price` (never
+ * from Gemini). No proposal generation or email happens here.
  */
 
 const input = z.object({
