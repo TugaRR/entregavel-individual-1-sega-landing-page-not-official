@@ -419,14 +419,18 @@ export const interpretProposalRequest = createServerFn({ method: "POST" })
               console.error(`[email] gateway failed [${res.status}]: ${body}`);
               emailStatus = "failed";
               emailError = `Email provider rejected the send (${res.status}).`;
+              await markEmailResult(false);
             } else {
               emailStatus = "sent";
+              finalStatus = "sent";
+              await markEmailResult(true);
               console.info(`[email] proposal email sent to ${clientEmail} for ${proposalUrl}`);
             }
           } catch (e) {
             console.error("[email] send failed", e);
             emailStatus = "failed";
             emailError = "The email could not be sent.";
+            await markEmailResult(false);
           }
         }
       }
