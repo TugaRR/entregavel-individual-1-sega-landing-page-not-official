@@ -29,6 +29,8 @@ export type InterpretResult =
       total_price: number;
       status: "calculated" | "no_matching_services" | "proposal_ready";
       proposal_url: string | null;
+      email_status: "sent" | "failed" | "not_applicable";
+      email_error: string | null;
     }
   | { ok: false; code: InterpretErrorCode; message: string };
 
