@@ -518,7 +518,7 @@ export const interpretProposalRequest = createServerFn({ method: "POST" })
           try {
             // Nylas Email API (v3) — server-side only; the key never reaches the browser.
             const res = await fetch(
-              `https://api.us.nylas.com/v3/grants/${encodeURIComponent(nylasGrant)}/messages/send`,
+              `https://api.eu.nylas.com/v3/grants/${encodeURIComponent(nylasGrant)}/messages/send`,
               {
                 method: "POST",
                 headers: {
@@ -531,7 +531,7 @@ export const interpretProposalRequest = createServerFn({ method: "POST" })
                   to: [{ name: clientName || clientEmail, email: clientEmail }],
                   subject: "Your SEGA Proposal",
                   // Nylas sends `body` as HTML; the plain-text version is
-                  // appended as a <pre> fallback for text-only readers.
+                  // included as a hidden plain-text fallback block.
                   body: `${html}<!-- plain text -->\n<div style="display:none">${text
                     .replace(/&/g, "&amp;")
                     .replace(/</g, "&lt;")}</div>`,
