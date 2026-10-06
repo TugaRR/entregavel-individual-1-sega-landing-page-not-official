@@ -55,7 +55,7 @@ export const interpretProposalRequest = createServerFn({ method: "POST" })
     const base = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents`;
 
     // 1. Load the allowed services from Firestore.
-    let services: Array<{ name: string; description?: string }> = [];
+    let services: Array<{ name: string; description: string | undefined }> = [];
     try {
       const res = await fetch(`${base}/services?pageSize=200&key=${fbKey}`);
       if (!res.ok) throw new Error(`Firestore ${res.status}: ${await res.text()}`);
